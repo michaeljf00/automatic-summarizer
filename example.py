@@ -56,18 +56,32 @@ def getComments():
     return regulations, comments
 
 
-def main(num_topics=15):
-    
+def main(num_topics=2):
     regulations, comments = getComments()
-    
+
     topicModel = TopicModel(num_topics)
     topicModel.fit(comments)
 
     for docket_id, document in regulations.items():
         docSummaries = DocumentSummaries(topicModel, num_dominant_topics=3, number_of_sentences=4)
         docSummaries.summarize(document)
+        break
         print(docket_id)
         docSummaries.display()
+
+    '''
+    data = readData()
+    documents = list(data.values())
+
+    topicModel = TopicModel(num_topics)
+    topicModel.fit(documents)
+
+    for title, doc in data.items():
+        docSummaries = DocumentSummaries(topicModel, num_dominant_topics=3, number_of_sentences=4)
+        docSummaries.summarize(doc.split('.'))
+        print(title)
+        docSummaries.display()
+    '''
 
 if __name__ == "__main__":
     main()

@@ -146,7 +146,7 @@ class DocumentSummaries(object):
             sentence_groups.append(sentence_group)
         return sentence_groups
     
-    
+   # TODO: This shit is returning a list of empty lists
     def getSentenceDistributions(self):
         # computes topic distributions for each sentence
         # output: list of lists
@@ -158,6 +158,8 @@ class DocumentSummaries(object):
         get_document_topics = self.lda.get_document_topics
         for sentences in self.sentence_groups:
             sentence_distributions = list()
+
+            # TODO: For loop isnt hit
             for k, sentence in sentences:
                 tkns = tokenizer(sentence)
                 if tkns is None:
@@ -186,9 +188,9 @@ class DocumentSummaries(object):
         
         for dtid in self.dominant_topic_ids:
             results_per_topic = dict()
-            
+
             top_sentences = self.sentencesPerTopic(dtid)
-            
+
             topic_terms = self.lda.show_topic(dtid)
             terms = [t[0] for t in topic_terms]
             weights = [w[1] for w in topic_terms]
@@ -200,7 +202,7 @@ class DocumentSummaries(object):
                 #displaySummary(top_sentences, topic_terms)
             
             results_per_docket[dtid] = ts
-        
+
         return results_per_docket
 
 
@@ -208,6 +210,7 @@ class DocumentSummaries(object):
         
         # get only the document/sentence numbers that are dominated
         # by the dominant topic
+        # TODO: Figure out why the fuck this returns empty
         filtered_by_topic_id = self.filterSentencesByTopic(dominant_topic_id)
         
         # if the filtered list finds no sentences, move on
@@ -254,12 +257,14 @@ class DocumentSummaries(object):
         # that match the given topic_id
         #
         # the output is a list of triplets:
-        # (document number, sentence number, weight)
+        # (document number, sentence number,weight)
         filtered_by_topic_id = list()
         for k, distribution in enumerate(self.distributions):
             filtered = [d for d in distribution if d[1][0] == topic_id]
             for item in filtered:
                 filtered_by_topic_id.append((k, item[0], item[1][1]))
+
+
         return filtered_by_topic_id
     
     
