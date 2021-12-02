@@ -1,27 +1,48 @@
 #!/usr/bin/env python
 # coding: utf-8
-import nltk
 import os
+
+from math import sqrt
+import numpy as np
+
 from nltk.corpus import stopwords
-from nltk.cluster.util import cosine_distance
 from xml.dom.minidom import parse
 
-import numpy as np
 import networkx as nx
 
+from pyrouge import Rouge155
 
-def read_document(document):
-    sentences = []
+r = Rouge155()
+r.system_dir = 'path/to/system_summaries'
+r.model_dir = 'path/to/model_summaries'
+r.system_filename_pattern = 'some_name.(\d+).txt'
+r.model_filename_pattern = 'some_name.[A-Z].#ID#.txt'
+
+output = r.convert_and_evaluate()
+print(output)
+output_dict = r.output_to_dict(output)
+
+def evaluateRougeScore(documnent):
+    pass
+
+def readDocument(document):
+    sentences = list()
 
     contents = document.split('.')
 
     for sentence in contents:
-        #print(sentence)
-        sentences.append(sentence.replace("[^a-zA-Z]", " ").split(" "))
+        # Refine sentence and replace sentences that begin with non-alpha characters
+        refinedSentence = sentence.replace("[^a-zA-Z]", " ").split(" ")
+        # Add refined sentence to list of sentences
+        sentences.append(refinedSentence)
     sentences.pop()
 
-    return sentences
+    # Filter out sentences that contain only two or less words
+    sentences = list(filter(lambda x: len(x) > 2, sentences))
 
+    #print(sentences)
+
+    return sentences
 
 
 def readData():
@@ -54,76 +75,91 @@ def readData():
     return ret
 
 
-def sentence_similarity(sent1, sent2, stopwords=None):
-    if stopwords is None:
-        stopwords = []
-
-    sent1 = [w.lower() for w in sent1]
-    sent2 = [w.lower() for w in sent2]
-
-    all_words = list(set(sent1 + sent2))
-
-    vector1 = [0] * len(all_words)
-    vector2 = [0] * len(all_words)
-
-    # build the vector for the first sentence
-    for w in sent1:
-        if w in stopwords:
-            continue
-        vector1[all_words.index(w)] += 1
-
-    # build the vector for the second sentence
-    for w in sent2:
-        if w in stopwords:
-            continue
-        vector2[all_words.index(w)] += 1
-
-    return 1 - cosine_distance(vector1, vector2)
+# Calculate the cosine distance between two lists
+def cosSimilarity(l1, l2):
+    # Follows the formula for cosine distance 1 - (u.v / |u||v|)
+    return 1 - (np.dot(l1, l2) / (sqrt(np.dot(l1, l1)) * sqrt(np.dot(l2, l2))))
 
 
-def build_similarity_matrix(sentences, stop_words):
+def sentenceSimilarity(s1, s2, stopwords=None):
+    if stopwords is None: stopwords = list()
+
+    s1 = [t.lower() for t in s1]
+    s2 = [t.lower() for t in s2]
+
+    # Combined set of words from both sentences
+    words = list(set(s1 + s2))
+
+    wordsLength = len(words)
+
+    # Initialize vectors for both setences
+    l1 = [0] * wordsLength
+    l2 = [0] * wordsLength
+
+    # Create vector for the first sentence
+    for w in s1:
+        if w in stopwords: continue
+        l1[words.index(w)] += 1
+
+    # Create the vector for the second sentence
+    for w in s2:
+        if w in stopwords: continue
+        l2[words.index(w)] += 1
+
+    return 1 - cosSimilarity(l1, l2)
+
+
+def createSimilarityMatrix(sentences, stop_words):
     # Create an empty similarity matrix
-    similarity_matrix = np.zeros((len(sentences), len(sentences)))
+    sentenceLength = len(sentences)
+    similarityMatrix = np.zeros((sentenceLength, sentenceLength))
 
-    for idx1 in range(len(sentences)):
-        for idx2 in range(len(sentences)):
-            if idx1 == idx2:  # ignore if both are same sentences
-                continue
-            similarity_matrix[idx1][idx2] = sentence_similarity(sentences[idx1], sentences[idx2], stop_words)
+    for i in range(len(sentences)):
+        for j in range(len(sentences)):
+            if i == j:  continue # ignore if both are same sentences 
+            similarityMatrix[i][j] = sentenceSimilarity(sentences[i], sentences[j], stop_words)
 
-    return similarity_matrix
+    return similarityMatrix
 
 
-def generate_summary(document, top_n=5):
-    nltk.download("stopwords")
-    stop_words = stopwords.words('english')
-    summarize_text = list()
+# Summarize the given document
+def summarize(document, n=10):
+    stopWords = stopwords.words('english')
+    topSentences = list()
 
-    # Step 1 - Read text anc split it
-    sentences = read_document(document)
+    # Split document into a list of sentences
+    sentences = readDocument(document)
 
-    # Step 2 - Generate Similary Martix across sentences
-    sentence_similarity_martix = build_similarity_matrix(sentences, stop_words)
+    # Create a similarity matrix in regards to all of the sentences in the document
+    similarityMartix = createSimilarityMatrix(sentences, stopWords)
 
-    # Step 3 - Rank sentences in similarity martix
-    sentence_similarity_graph = nx.from_numpy_array(sentence_similarity_martix)
-    scores = nx.pagerank(sentence_similarity_graph)
+    # Rank sentences in similarity martix
+    similarityGraph = nx.from_numpy_array(similarityMartix)
+    scores = nx.pagerank(similarityGraph, max_iter=100)
 
-    # Step 4 - Sort the rank and pick top sentences
-    ranked_sentence = sorted(((scores[i], s) for i, s in enumerate(sentences)), reverse=True)
-    #print("Indexes of top ranked_sentence order are ", ranked_sentence)
+    # Sort by sentance rank
+    rankedSentences = sorted(((scores[i], s) for i, s in enumerate(sentences)), reverse=True)
 
-    for i in range(top_n):
-        summarize_text.append(" ".join(ranked_sentence[i][1]))
+    for i in range(n): topSentences.append(" ".join(rankedSentences[i][1]))
 
-    # Step 5 - Offcourse, output the summarize text
-    print("Summarize Text: \n", ". ".join(summarize_text))
+    print("Text Summmary: \n", ". ".join(topSentences) + '.\n\n')
 
-# let's begin
 
-if __name__ == "__main__":
+# Get summaries of the documents in the dataset
+def getSummaries(n=1):
     data = readData()
+    i = 0
     for title, content in data.items():
         print(title)
-        generate_summary(content)
-        print()
+        summarize(content)
+        i += 1
+        if (i == n): break
+
+
+def main():
+   getSummaries()
+
+
+# Run main function
+if __name__ == "__main__":
+    main()
